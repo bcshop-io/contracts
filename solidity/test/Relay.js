@@ -7,7 +7,7 @@ var BancorGasPriceLimit = artifacts.require('BancorGasPriceLimit.sol');
 var BancorQuickConverter = artifacts.require('BancorQuickConverter.sol');
 var BancorConverterExtensions = artifacts.require('BancorConverterExtensions.sol');
 var SmartToken = artifacts.require("SmartToken");
-var TestToken = artifacts.require("TestERC20Token");
+var TestToken = artifacts.require("TestERC20DecimalsToken");
 var EtherToken = artifacts.require("EtherToken");
 
 const weight10Percent = 100000;

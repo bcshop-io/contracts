@@ -17,7 +17,7 @@ function _R18(value) {return value / E18;}
 const weight10Percent = 100000;
 const gasPrice = 22000000000;
 const gasPriceBad = 22000000001;
-const TotalSupply = _E18(10000000);
+const TotalSupply = _E18(500);
 
 //returns specifeid token's real balance
 async function _TB(_token, _holder) {
@@ -136,8 +136,11 @@ async function _TB(_token, _holder) {
 
 
 contract("Token relay BCS+BNT, Smart Token BNT+ETH", function(accounts) {
-    var bcsforOneEther = _E18(100);
-    var bntforOneEther = _E18(136);
+    let BNTETH = 200;
+    let BCSETH = 100;
+
+    var bcsforOneEther = _E18(BCSETH);
+    var bntforOneEther = _E18(BNTETH);
     var relayToken;
     var bcsToken;
     var ethToken;
@@ -150,10 +153,10 @@ contract("Token relay BCS+BNT, Smart Token BNT+ETH", function(accounts) {
     var bntOwner = accounts[1];
     var user = accounts[3];
     
-    var initialBcs = TotalSupply * 20 / 1000;    
+    var initialBcs = TotalSupply * 20 / 1000; //2% of total tokens
     var initialBnt1 = _E18(1000);
-    var initialBnt2 = initialBcs * 136 / 100;
-    var initialEth =  initialBnt1 / 136;//100000;
+    var initialBnt2 = initialBcs * BNTETH / BCSETH;
+    var initialEth =  initialBnt1 / BNTETH / 10; //corresponds to 10% connector weight
     var initialBcr = _E18(100);
     var userBcsBalance;
     
@@ -173,17 +176,32 @@ contract("Token relay BCS+BNT, Smart Token BNT+ETH", function(accounts) {
 
         await bntToken.transferOwnership(bntConverter.address, {from:bntOwner});
         await bntConverter.acceptTokenOwnership({from:bntOwner});
-
+        
         await ethToken.deposit({from: bntOwner, value: initialEth});
         await ethToken.transfer(bntConverter.address, initialEth, {from:bntOwner});
 
-        assert.equal(await bntToken.totalSupply.call(), initialBnt1 + initialBnt2, "Invalid total supply of BNT");
+        //assert.equal(await bntToken.totalSupply.call(), initialBnt1 , "Invalid total supply of BNT");
         assert.equal(await _TB(bntToken, bntConverter.address), initialBnt1, "Invalid BntConverter's balance of BNT");
         assert.equal(await _TB(ethToken, bntConverter.address), initialEth, "Invalid BntConverter's balance of ETH");
-    })
+    });
+
+    // it("bcs owner buys bnt on relay", async function() {
+    //     let oldBntBalance = await bntToken.balanceOf.call(bcsOwner);
+    //     let etherAmount = initialBcs / BCSETH;
+    //     var expectedBntAmount = (await bntConverter.getPurchaseReturn(ethToken.address, etherAmount)).toNumber();
+    //     // console.log(etherAmount);
+    //     console.log(expectedBntAmount);
+    //     await ethToken.deposit({from:bcsOwner, value:etherAmount});
+    //     await ethToken.approve(bntConverter.address, _E18(10), {from:bcsOwner});
+    //     await bntConverter.convert(ethToken.address, bntToken.address, etherAmount, 1, {from:bcsOwner});
+
+    //     assert.equal(await _TB(bntToken, bcsOwner), expectedBntAmount, "!!");
+    // });
     
     it("create BCSBNT relay (50% BCS, 50% BNT)", async function() {
-        userBcsBalance = _E18(1000);
+        initialBnt2 = await bntToken.balanceOf.call(bcsOwner);//await _TB(bntToken, bcsOwner);
+        console.log(initialBnt2);
+        userBcsBalance = _E18(8);
         bcsToken = await TestToken.new("BCS Token", "BCS", TotalSupply, 18);        
         await bcsToken.transfer(user, userBcsBalance);
 
@@ -193,9 +211,9 @@ contract("Token relay BCS+BNT, Smart Token BNT+ETH", function(accounts) {
         quickConverter = await BancorQuickConverter.new();
         converterExtensions = await BancorConverterExtensions.new(formula.address, gasPriceLimit.address, quickConverter.address);
         
-        bcsConverter = await BancorConverter.new(relayToken.address, converterExtensions.address, 2000, bcsToken.address, weight10Percent*5);        
+        bcsConverter = await BancorConverter.new(relayToken.address, converterExtensions.address, 20000, bcsToken.address, weight10Percent*5);        
         await bcsConverter.addConnector(bntToken.address, weight10Percent*5, false);
-        await bcsConverter.setConversionFee(1000);
+        //await bcsConverter.setConversionFee(10000);
 
         await relayToken.issue(bcsConverter.address, initialBcr);
         await relayToken.transferOwnership(bcsConverter.address);
@@ -207,13 +225,13 @@ contract("Token relay BCS+BNT, Smart Token BNT+ETH", function(accounts) {
         await bcsToken.transfer(bcsConverter.address, initialBcs);
         await bntToken.transfer(bcsConverter.address, initialBnt2);
 
-        assert.equal(await relayToken.totalSupply.call(), initialBcr, "Invalid total supply of BCR");
-        assert.equal(await _TB(bcsToken, bcsConverter.address), initialBcs, "Invalid BcsConverter's balance of BCS");
-        assert.equal(await _TB(bntToken, bcsConverter.address), initialBnt2, "Invalid BcsConverter's balance of BNT");
+        // assert.equal(await relayToken.totalSupply.call(), initialBcr, "Invalid total supply of BCR");
+        // assert.equal(await _TB(bcsToken, bcsConverter.address), initialBcs, "Invalid BcsConverter's balance of BCS");
+        // assert.equal(await _TB(bntToken, bcsConverter.address), initialBnt2, "Invalid BcsConverter's balance of BNT");
     })
     
     it("change bcs to bnt", async function() {        
-        var amountToChange = _E18(100);
+        var amountToChange = _E18(0.1);
 
         await bcsToken.approve(bcsConverter.address, TotalSupply, {from:user});
         var balance1 = await _TB(bntToken, user);
@@ -222,10 +240,10 @@ contract("Token relay BCS+BNT, Smart Token BNT+ETH", function(accounts) {
         var gained = balance2 - balance1;
         var gainedEth = gained / bntforOneEther;
         console.log("Changed " + _R18(amountToChange) + " BCS for " + _R18(gained) + " BNT (" + gainedEth + " ETH)");
-    })
+    });
 
     it("change bcs to bnt again", async function() {        
-        var amountToChange = _E18(100);
+        var amountToChange = _E18(0.1);
         
         var balance1 = await _TB(bntToken, user);
         await bcsConverter.convert(bcsToken.address, bntToken.address, amountToChange, 1, {from:user});
@@ -233,50 +251,73 @@ contract("Token relay BCS+BNT, Smart Token BNT+ETH", function(accounts) {
         var gained = balance2 - balance1;
         var gainedEth = gained / bntforOneEther;
         console.log("Changed " + _R18(amountToChange) + " BCS for " + _R18(gained) + " BNT (" + gainedEth + " ETH)");
-    })
+    });
 
-    it("change bcs to bnt again", async function() {        
-        var amountToChange = _E18(100);
-        
-        var balance1 = await _TB(bntToken, user);
-        await bcsConverter.convert(bcsToken.address, bntToken.address, amountToChange, 1, {from:user});
-        var balance2 = await _TB(bntToken, user);
-        var gained = balance2 - balance1;
-        var gainedEth = gained / bntforOneEther;
-        console.log("Changed " + _R18(amountToChange) + " BCS for " + _R18(gained) + " BNT (" + gainedEth + " ETH)");
-    })
-
+    
     it("change bnt to bcs back", async function() {
         var amountToApprove = await _TB(bntToken, user);
         await bntToken.approve(bcsConverter.address, amountToApprove, {from:user});
-        console.log(_R18(amountToApprove));
-        var amountToChange = _E18(136);
+      //  console.log(_R18(amountToApprove));
+        var amountToChange = _E18(0.2);
         var balance1 = await _TB(bcsToken, user);
         await bcsConverter.convert(bntToken.address, bcsToken.address, amountToChange, 1, {from:user});
         var balance2 = await _TB(bcsToken, user);
         var gained = balance2 - balance1;        
         console.log("Changed " + _R18(amountToChange) + " BNT for " + _R18(gained) + " BCS");
-    })
-    
-    // it("quick change BCS to ETH as user", async function() {
-    //     var amount = _E18(1);
-    //     var quickBuyPath = [
-    //         bcsToken.address, 
-    //         relayToken.address, 
-    //         bntToken.address, 
-    //         bntToken.address, 
-    //         ethToken.address];
-        
-    //     var txr = await bcsConverter.quickConvert(quickBuyPath, amount, 1, {from:user});
-    //     //console.log(txr.logs);
-    //     var result = await _TB(ethToken, user);
-    //     console.log("Changed " + amount + " BCS for " + result + " WEI");
-    //     await ethToken.withdraw(result, {from:user});
+    });
 
-    //     var txr = await bcsConverter.quickConvert(quickBuyPath, amount, 1, {from:user});
-    //     //console.log(txr.logs);
-    //     var result = await _TB(ethToken, user);
-    //     console.log("Changed " + amount + " BCS for " + result + " WEI");
-    // })
+    it("change bcs to bnt again", async function() {        
+        var amountToChange = _E18(0.1);
+        
+        var balance1 = await _TB(bntToken, user);
+        await bcsConverter.convert(bcsToken.address, bntToken.address, amountToChange, 1, {from:user});
+        var balance2 = await _TB(bntToken, user);
+        var gained = balance2 - balance1;
+        var gainedEth = gained / bntforOneEther;
+        console.log("Changed " + _R18(amountToChange) + " BCS for " + _R18(gained) + " BNT (" + gainedEth + " ETH)");
+    });    
+
+    it("quick change BCS to ETH as user", async function() {
+        var amount = _E18(0.1);
+        var quickBuyPath = [
+            bcsToken.address, 
+            relayToken.address, 
+            bntToken.address, 
+            bntToken.address, 
+            ethToken.address];
+        
+        //console.log(await bcsToken.allowance(user, bcsConverter.address));
+        //console.log(await bntToken.allowance(user, bcsConverter.address));
+        
+        var txr = await bcsConverter.quickConvert(quickBuyPath, amount, 1, {from:user});
+       // console.log(txr.logs);
+        var result = await _TB(ethToken, user);
+        console.log("Changed " + _R18(amount) + " BCS for " + _R18(result) + " ETH");
+        await ethToken.withdraw(result, {from:user});
+
+        var txr = await bcsConverter.quickConvert(quickBuyPath, amount, 1, {from:user});
+        //console.log(txr.logs);
+        var result = await _TB(ethToken, user);
+        console.log("Changed " + _R18(amount) + " BCS for " + _R18(result) + " ETH");
+    })
+
+    it("withdraw tokens from the relay", async function() {
+        let bcsOnConverter = await bcsToken.balanceOf.call(bcsConverter.address); //await _TB(bcsToken, bcsConverter.address);
+        // console.log("BCS left in converter: ");
+        // console.log(bcsOnConverter.toString());
+
+        let bntOnConverter = await bntToken.balanceOf.call(bcsConverter.address);
+        // console.log("BNT left in converter: ");
+        // console.log(bntOnConverter.toString());
+
+        await bcsConverter.withdrawTokens(bcsToken.address, accounts[9], bcsOnConverter);
+        await bcsConverter.withdrawTokens(bntToken.address, accounts[9], bntOnConverter);
+
+        assert.equal(await _TB(bcsToken, bcsConverter.address), 0, "There should be 0 BCS in converter");
+        assert.equal(await _TB(bntToken, bcsConverter.address), 0, "There should be 0 BNT in converter");
+
+        assert.equal(await _TB(bcsToken, accounts[9]), bcsOnConverter, "There should be ALL BCS transfered to accounts[9]");
+        assert.equal(await _TB(bntToken, accounts[9]), bntOnConverter, "There should be ALL BNT transfered to accounts[9]");
+    });
 })
 
